@@ -13,12 +13,13 @@
              ┌──────────── gw-newsletter ───────┼──────── gw-<name> ────────┐
              ▼                                                              ▼
        newsletter-web:8787                                              <name>-app
-       └─ be 網路 ─ newsletter-worker（gateway 碰不到）
+       （newsletter-ops repo 自己部署）                                   （這個 repo 的 services/ 或別的 repo）
 
 家裡區網／VPN ──▶ host:8788 ──▶ gateway-nginx:8788（newsletter 的 /auth、/ops）
 ```
 
 - **gateway 是唯一的入口與轉接**：誰能進來、轉到哪個服務、哪些路徑擋掉，都在 `gateway/`。服務本身不處理這些。
+- **服務可以放在自己的 repo**（例如 newsletter 留在 newsletter-ops）：只要照「接上 gateway」加入 `gw-<name>` 網路，gateway 這邊的路由仍集中在這裡。
 - **一個服務一個 `gw-<name>` 網路**：gateway-nginx 連得到全部服務，服務之間互相連不到，也就沒辦法繞過 gateway 的規則
   （例如別的服務直接打 `newsletter-web/api/auth`）。
 - 不經 Dokploy 的 Traefik（Dokploy 的 Domain 功能不用）：路由全部在 git 裡。
@@ -37,8 +38,8 @@
 
 ## 命名規則
 
-- **compose 的服務名稱一律加 `<name>-` 前綴**（`newsletter-web`、`pg-test`、`xxx-db`）。gateway-nginx 同時在每個 `gw-*` 網路上，
-  兩個服務都叫 `web` 的話，`http://web` 會被 Docker DNS 輪流解到不同的容器。
+- **compose 的服務名稱一律加 `<name>-` 前綴**（`pg-test`、`xxx-app`、`xxx-db`）。gateway-nginx 同時在每個 `gw-*` 網路上，
+  兩個服務都叫 `web` 的話，`http://web` 會被 Docker DNS 輪流解到不同的容器。別的 repo 的服務改不了名稱時，用 `gw-*` 網路上的唯一別名。
 - 專案內部的網路（`be`、`default`）與 volume 不用加：compose 會自動用專案名稱當前綴。
 - `gw-<name>` 網路由 gateway 建立（固定名稱與子網），服務端宣告成 `external: true`。
 
@@ -60,6 +61,25 @@
 
 不對外的服務（DB、runner）不用 2～4 步，也不用 `gw-*` 網路。
 
+## 接上 gateway（服務在別的 repo）
+
+服務的 compose 留在它自己的 repo，gateway 這邊照「新增一個對外服務」的 2～4 步（網路、`geo $lan`、站台 conf）。服務那邊只要：
+
+1. 拿掉自己的 cloudflared 和對外的 nginx（入口由 gateway 負責），也不要 publish 對外的 port。
+2. 讓 gateway 要連的那個容器加入 `gw-<name>`，並帶一個**唯一的別名**，站台 conf 的 upstream 就用這個別名：
+   ```yaml
+   services:
+     web:
+       networks:
+         gw-newsletter: {aliases: [newsletter-web]}
+         be: {}
+   networks:
+     gw-newsletter:
+       external: true
+   ```
+   用別名的話，對方 repo 的服務名稱（`web`）不用改。只有這個容器加入 `gw-*`，worker、DB 之類的不要。
+3. 部署順序：gateway 先（它建立 `gw-<name>`），服務後。
+
 ## 第一次設定
 
 1. **Cloudflare Access**：Zero Trust → Access → Applications → Self-hosted，domain 填 `*.ponygames.net`，政策只放行自己的 email。
@@ -74,18 +94,26 @@
    之後改 `cloudflare-tunnel.json` 推到 main，`.github/workflows/tunnel-sync.yml` 會自動套用（repo secrets：`CF_API_TOKEN`、`CF_ACCOUNT_ID`、`CF_TUNNEL_ID`、`CF_ZONE_ID`）。
    **不要再到 Cloudflare 網頁上改 Public Hostname**：下次 apply 會整份蓋掉。
 
-## 從 newsletter-ops 搬過來
+## newsletter-ops 改接 gateway
 
-沿用**同一條 Tunnel**（同一個 `TUNNEL_TOKEN`、`CF_TUNNEL_ID`），`newsletter.ponygames.net` 的 CNAME 已經指向它。順序很重要：
+newsletter 留在 newsletter-ops repo；gateway 這邊已經備好 `gw-newsletter` 網路與 `gateway/nginx/conf.d/newsletter.conf`
+（從 newsletter-ops 的 `docker/nginx.conf` 搬來，規則相同）。Tunnel 沿用**同一條**（同一個 `TUNNEL_TOKEN`、`CF_TUNNEL_ID`），
+`newsletter.ponygames.net` 的 CNAME 已經指向它。
 
-1. 停掉 newsletter-ops 原本的整組容器（`docker compose down`）與 `newsletter-autodeploy.timer`。
-   同一條 Tunnel 的設定是全部 connector 共用的，舊的 cloudflared 還在跑的話，收到新設定會找不到 `gateway-nginx`，一部分請求 502。
-   8788 port 也會和 gateway 撞。
-2. **停用 newsletter-ops repo 的 `tunnel-sync.yml`**（刪掉 workflow 或 `deploy/cloudflare-tunnel.json`）：兩個 repo 都會 PUT 整份 Tunnel 設定，互相覆蓋。
-3. 照「第一次設定」部署 gateway、套用路由；再部署 `services/newsletter`（不需要 `TUNNEL_TOKEN`）。
-4. 資料：舊 volume 叫 `newsletter-ops_newsletter-data`，Dokploy 會以 app 名稱建新的。部署前先複製內容過去，
-   或在 compose 的 `volumes.newsletter-data` 加 `external: true` + `name: newsletter-ops_newsletter-data` 直接沿用。
-5. 照 newsletter-ops `deploy/README.md` 的驗收表檢查，特別是「未登入 `curl -sI https://newsletter.ponygames.net/reports` 絕不能是 200」，
+newsletter-ops 那邊要改：
+
+- `docker-compose.yml`：拿掉 `nginx`、`cloudflared` 兩個服務與 `edge`、`app` 網路；`web` 改成加入 `gw-newsletter`（別名 `newsletter-web`）與 `be`，
+  照「接上 gateway」第 2 步。`TUNNEL_TOKEN` 從 `.env.example` 拿掉。
+- `docker/nginx.conf` 不再使用（規則已在 gateway），`deploy/test_nginx.py` 之類的測試要跟著調整或移到這裡。
+- **停用 `.github/workflows/tunnel-sync.yml`**（或刪掉 `deploy/cloudflare-tunnel.json`）：兩個 repo 都會 PUT 整份 Tunnel 設定，互相覆蓋。
+
+切換順序：
+
+1. 停掉 newsletter-ops 正在跑的 cloudflared 與 nginx。同一條 Tunnel 的設定是全部 connector 共用的，
+   舊的 cloudflared 還在跑的話，收到新設定會找不到 `gateway-nginx`，一部分請求 502；舊 nginx 的 8788 也會和 gateway 撞。
+2. 照「第一次設定」部署 gateway、套用路由。
+3. 用改好的 compose 重新部署 newsletter-ops（volume 名稱不變，資料不用搬）。
+4. 照 newsletter-ops `deploy/README.md` 的驗收表檢查，特別是「未登入 `curl -sI https://newsletter.ponygames.net/reports` 絕不能是 200」，
    以及區網 `http://<host IP>:8788/auth` 開得到、`/ops` 從 Tunnel 網域開是 404。
 
 ## CI：pg-test 與 github-runner
