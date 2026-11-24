@@ -1,5 +1,3 @@
-# 測試用 Postgres：還原 Pi 拉回來的 dump，給 CI 跑測試。
-# Dokploy：Compose app，Compose Path ./services/pg-test/docker-compose.yml，Environment 填 PG_PASSWORD。
 services:
   pg-test:
     extends: {file: ../../common/postgres.yml, service: postgres}
@@ -7,14 +5,10 @@ services:
       POSTGRES_PASSWORD: ${PG_PASSWORD:?請設定 PG_PASSWORD}
       POSTGRES_DB: personal
     volumes:
-      - pgtest:/var/lib/postgresql
-      # 初始化 SQL 放 repo（services/pg-test/init/*.sql），只在 volume 是空的第一次啟動時執行。
-      # 原本的 ../files/init 在這個 repo 結構下會解析成 services/files/init，不是 Dokploy 的 files 目錄
+      - pg:/var/lib/postgresql
       - ./init:/docker-entrypoint-initdb.d:ro
-      - /backups/pg:/backups:ro    # 從 Pi 拉回來的 dump，用來還原
-    # 測試用 DB 不需要防當機的保護，關掉換取速度
+      - /backups/pg:/backups:ro   
     command: >
-      -c fsync=off -c synchronous_commit=off -c full_page_writes=off
       -c shared_buffers=256MB -c max_connections=100
     # 給不在 dokploy-network 裡的 CI job（runner 用 docker.sock 開的兄弟容器）用。
     # 這會綁 host 所有介面：區網其他機器也連得到，只想給本機就改成 "127.0.0.1:5432:5432"
@@ -24,7 +18,7 @@ services:
     networks: [dokploy-network]
 
 volumes:
-  pgtest:
+  pg:
 
 networks:
   dokploy-network:
