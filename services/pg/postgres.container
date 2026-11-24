@@ -1,0 +1,38 @@
+# 正式區 Postgres（raspi，rootful Quadlet）。安裝：sudo scripts/quadlet-install.sh services/pg
+# 不用 rootless：raspi 沒開 user 的 D-Bus／logind，rootless 的 systemd 單元起不來。
+[Unit]
+Description=PostgreSQL (personal)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=postgres
+Image=docker.io/library/postgres:18
+Network=pg.network
+PublishPort=0.0.0.0:5432:5432
+# 固定的 uid/gid 對應：容器內的 0–65535 對應到 host 的 100000–165535（容器裡的 postgres uid 999 = host 100999）
+UIDMap=0:100000:65536
+GIDMap=0:100000:65536
+# 兩個目錄由 prepare.sh 建立；init 只在 data 是空的第一次啟動時執行
+Volume=/srv/pg/data:/var/lib/postgresql
+Volume=/srv/pg/init:/docker-entrypoint-initdb.d:ro
+# 密碼不進 repo：podman secret create pg_pw -（見 README「raspi（Quadlet）」）
+Secret=pg_pw
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/pg_pw
+Environment=POSTGRES_DB=personal
+Environment=TZ=Asia/Taipei
+ShmSize=256m
+NoNewPrivileges=true
+HealthCmd=pg_isready -U postgres -d personal
+HealthInterval=30s
+Exec=-c shared_buffers=512MB -c effective_cache_size=1536MB \
+     -c work_mem=8MB -c maintenance_work_mem=128MB \
+     -c max_connections=50 -c random_page_cost=1.1 \
+     -c wal_compression=on -c log_min_duration_statement=1000
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

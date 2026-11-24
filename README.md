@@ -35,6 +35,8 @@
 | `gateway/nginx/conf.d/` | `00-common.conf` 共用設定；每個站台一個 `<name>.conf` |
 | `services/<name>/` | 一個服務一個資料夾，一個 Dokploy Compose app |
 | `services/_template/` | 新服務的起點（另有 `gateway/nginx/conf.d/_template.conf.example`） |
+| `services/pg/` | 正式區 Postgres（raspi，Quadlet 單元，不是 compose） |
+| `scripts/quadlet-install.sh` | 把服務資料夾的 Quadlet 單元裝到 raspi 的 `/etc/containers/systemd` |
 
 ## 命名規則
 
@@ -115,6 +117,30 @@ newsletter-ops 那邊要改：
 3. 用改好的 compose 重新部署 newsletter-ops（volume 名稱不變，資料不用搬）。
 4. 照 newsletter-ops `deploy/README.md` 的驗收表檢查，特別是「未登入 `curl -sI https://newsletter.ponygames.net/reports` 絕不能是 200」，
    以及區網 `http://<host IP>:8788/auth` 開得到、`/ops` 從 Tunnel 網域開是 404。
+
+## raspi（Quadlet）
+
+正式機 raspi 不跑 Dokploy，用 podman 的 Quadlet 交給 systemd 管理。服務資料夾裡放 `*.container`／`*.network`／`*.volume`，
+用 `scripts/quadlet-install.sh` 裝到 `/etc/containers/systemd`。**一律 rootful**：raspi 沒開 user 的 D-Bus／logind，rootless 的 systemd 單元起不來。
+
+```bash
+# raspi 上，第一次
+git clone https://github.com/Ponywen0819/service-core /root/service-core
+printf '%s' '<密碼>' | podman secret create pg_pw -      # 機密只放 podman secret，不進 repo
+
+# 安裝／更新（會先跑資料夾裡的 prepare.sh，再用 quadlet -dryrun 檢查語法，最後 daemon-reload 並重啟）
+cd /root/service-core && git pull && scripts/quadlet-install.sh services/pg
+systemctl status postgres.service
+
+# 移除單元（不刪 /srv 上的資料）
+scripts/quadlet-install.sh --remove services/pg
+```
+
+| 服務 | 單元 | 資料 | 備註 |
+|---|---|---|---|
+| `services/pg` | `postgres.container`、`pg.network`（`pg-net`） | `/srv/pg/data` | 5432 對 host 所有介面開放；初始化 SQL 在 `services/pg/init/`，`prepare.sh` 同步到 `/srv/pg/init` |
+
+Quadlet 的服務名稱：`postgres.container` → `postgres.service`，`pg.network` → `pg-network.service`；log 用 `journalctl -u postgres.service`。
 
 ## CI：pg-test 與 github-runner
 
