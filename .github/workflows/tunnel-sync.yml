@@ -1,0 +1,42 @@
+name: tunnel-sync
+
+# ingress/cloudflare-tunnel.json 是 Cloudflare Tunnel 路由的唯一來源（見 README「Tunnel 路由」）
+# PR：驗檔案、與線上比對；main 更新後才套用（PUT 整份設定、補 DNS CNAME）
+on:
+  pull_request:
+    paths: [ingress/cloudflare-tunnel.json, ingress/public-hosts.txt, ingress/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
+  push:
+    branches: [main]
+    paths: [ingress/cloudflare-tunnel.json, ingress/public-hosts.txt, ingress/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tunnel-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # fork 來的 PR 拿不到 secrets，也不該碰線上設定
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest   # 想沿用 newsletter-ops 的自架 runner 就改成 [self-hosted, linux, x64]
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check
+        run: bash ingress/tunnel-sync.sh check
+
+      - name: Diff against live
+        if: env.CF_API_TOKEN != ''
+        run: bash ingress/tunnel-sync.sh diff
+
+      - name: Apply
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: bash ingress/tunnel-sync.sh apply

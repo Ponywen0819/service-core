@@ -1,0 +1,17 @@
+# 各服務共用的安全預設。不要直接部署這個檔，在服務裡用 extends 引用：
+#
+#   services:
+#     app:
+#       extends: {file: ../../common/base.yml, service: hardened}
+#
+# extends 合併規則：純量（restart、init）可在服務裡覆寫；cap_drop、security_opt 會與服務自己的取聯集。
+# read_only 與 tmpfs 刻意不放這裡：每個映像要寫的路徑不同，tmpfs 合併時重複的路徑會報錯，各服務自己寫。
+services:
+  hardened:
+    restart: unless-stopped
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

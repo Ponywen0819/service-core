@@ -1,0 +1,6 @@
+# 不經 Cloudflare Access、對外公開的 hostname，一行一個（要完整比對，不支援萬用字元）。
+# 這裡沒列的 hostname，tunnel-sync.sh check 都要求開 originRequest.access.required。
+# 公開服務還要：
+#   1. 在 cloudflare-tunnel.json 的 *.ponygames.net 那條「上面」加一條這個 hostname、不帶 originRequest.access
+#   2. Cloudflare Access 為它建一個 Bypass 政策的 Application（否則 *.ponygames.net 的 Access 仍會要求登入）
+#   3. 服務自己要有身分驗證，或本來就該公開

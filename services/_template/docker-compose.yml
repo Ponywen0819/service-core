@@ -1,0 +1,36 @@
+# 新服務的起點：複製整個資料夾成 services/<name>/，把下面所有 CHANGEME 換成 <name>。
+# 服務名稱一律用 <name>- 前綴：接 Traefik 的容器都在同一個 dokploy-network，別的 compose 的 app、db 會和你的撞名。
+# 步驟見 README.md「新增一個服務」。
+services:
+  CHANGEME-app:
+    extends: {file: ../../common/base.yml, service: hardened}
+    image: CHANGEME/image:tag
+    # 映像只需要寫 /tmp 就開 read_only；要寫別的地方就加進 tmpfs 或 volume，真的不行再拿掉 read_only
+    read_only: true
+    tmpfs: [/tmp]
+    # 只寫容器 port，不要對應到 host（Traefik 直接連容器）
+    expose: ["8080"]
+    # 只有「接 Traefik 的那個容器」加入 dokploy-network；DB 之類的放 default，外面碰不到
+    networks: [default, dokploy-network]
+    labels:
+      - traefik.enable=true
+      # 把 CHANGEME 換成資料夾名稱（router／service 名稱在整台 Traefik 是全域的，不能重複）
+      - traefik.http.routers.CHANGEME.rule=Host(`CHANGEME.ponygames.net`)
+      - traefik.http.routers.CHANGEME.entrypoints=web
+      - traefik.http.routers.CHANGEME.service=CHANGEME
+      - traefik.http.services.CHANGEME.loadbalancer.server.port=8080
+      - traefik.docker.network=dokploy-network
+    # env_file: [.env]   # Dokploy 的 Environment 不會自動進容器：要全部帶進去就打開這行，或在 environment 用 ${VAR}
+
+  # CHANGEME-db:
+  #   image: postgres:17-alpine
+  #   volumes: [db-data:/var/lib/postgresql/data]
+  #   networks: [default]    # 不要加 dokploy-network
+  #   restart: unless-stopped
+
+# volumes:
+#   db-data:
+
+networks:
+  dokploy-network:
+    external: true
