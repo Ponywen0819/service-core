@@ -1,0 +1,30 @@
+# 所有 Postgres 共用的部分。用 extends 引用，只寫每個實例不同的地方（密碼、DB 名、volume、網路、調校參數）：
+#
+#   services:
+#     xxx-db:
+#       extends: {file: ../../common/postgres.yml, service: postgres}
+#       environment:
+#         POSTGRES_PASSWORD: ${PG_PASSWORD:?請設定 PG_PASSWORD}
+#         POSTGRES_DB: xxx
+#       volumes: [db-data:/var/lib/postgresql]
+#
+# environment 會逐個 key 合併，所以 TZ 不用再寫。
+# 不套 base.yml 的 hardened：postgres 的 entrypoint 要 chown 資料目錄、切換使用者，cap_drop ALL 會讓它起不來。
+services:
+  postgres:
+    # 主版本要和 Pi 一致（dump 還原、pg_upgrade 都看主版本）。18 起資料目錄掛 /var/lib/postgresql（不是 .../data）
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Taipei
+    # 用 CMD-SHELL 讀容器自己的環境變數，每個實例的 DB 名不用重寫
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER:-postgres}\" -d \"$${POSTGRES_DB:-postgres}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # 關機時讓 postgres 好好 checkpoint
+    stop_grace_period: 1m
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

@@ -3,7 +3,7 @@
     "ingress": [
       {
         "hostname": "newsletter.ponygames.net",
-        "service": "http://dokploy-traefik:80",
+        "service": "http://gateway-nginx:8080",
         "originRequest": {
           "access": {
             "required": true,
@@ -14,7 +14,7 @@
       },
       {
         "hostname": "*.ponygames.net",
-        "service": "http://dokploy-traefik:80",
+        "service": "http://gateway-nginx:8080",
         "originRequest": {
           "access": {
             "required": true,

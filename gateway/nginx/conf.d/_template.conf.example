@@ -1,0 +1,18 @@
+# 新站台：複製成 <name>.conf（副檔名一定要 .conf 才會載入），把 CHANGEME 換成 <name>。
+server {
+    listen 8080;
+    server_name CHANGEME.ponygames.net;
+    # 用變數：服務沒起來時只有這個站台 502，不會讓整個 gateway 啟動失敗
+    set $upstream http://CHANGEME-app:8080;
+
+    location / {
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;   # TLS 在 Cloudflare 結束
+        # WebSocket 要用就打開
+        # proxy_http_version 1.1;
+        # proxy_set_header Upgrade $http_upgrade;
+        # proxy_set_header Connection "upgrade";
+    }
+}

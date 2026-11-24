@@ -1,0 +1,16 @@
+# GitHub Actions self-hosted runner。共用設定在 common/github-runner.yml；要給另一個 repo 就在下面再加一個服務。
+# Dokploy：Compose app，Compose Path ./services/github-runner/docker-compose.yml，Environment 填 REPO_URL、ACCESS_TOKEN。
+services:
+  github-runner:
+    extends: {file: ../../common/github-runner.yml, service: github-runner}
+    environment:
+      REPO_URL: ${REPO_URL:?請設定 REPO_URL}
+      ACCESS_TOKEN: ${ACCESS_TOKEN:?請設定 ACCESS_TOKEN}
+      RUNNER_NAME_PREFIX: win-i5
+      RUNNER_WORKDIR: /tmp/runner/work
+    # 和 pg-test 共用：runner 容器裡的步驟用 pg-test:5432 連
+    networks: [dokploy-network]
+
+networks:
+  dokploy-network:
+    external: true

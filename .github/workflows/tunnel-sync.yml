@@ -1,13 +1,13 @@
 name: tunnel-sync
 
-# ingress/cloudflare-tunnel.json 是 Cloudflare Tunnel 路由的唯一來源（見 README「Tunnel 路由」）
+# gateway/cloudflare-tunnel.json 是 Cloudflare Tunnel 路由的唯一來源（見 README「Tunnel 路由」）
 # PR：驗檔案、與線上比對；main 更新後才套用（PUT 整份設定、補 DNS CNAME）
 on:
   pull_request:
-    paths: [ingress/cloudflare-tunnel.json, ingress/public-hosts.txt, ingress/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
+    paths: [gateway/cloudflare-tunnel.json, gateway/public-hosts.txt, gateway/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
   push:
     branches: [main]
-    paths: [ingress/cloudflare-tunnel.json, ingress/public-hosts.txt, ingress/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
+    paths: [gateway/cloudflare-tunnel.json, gateway/public-hosts.txt, gateway/tunnel-sync.sh, .github/workflows/tunnel-sync.yml]
   workflow_dispatch:
 
 permissions:
@@ -31,12 +31,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check
-        run: bash ingress/tunnel-sync.sh check
+        run: bash gateway/tunnel-sync.sh check
 
       - name: Diff against live
         if: env.CF_API_TOKEN != ''
-        run: bash ingress/tunnel-sync.sh diff
+        run: bash gateway/tunnel-sync.sh diff
 
       - name: Apply
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: bash ingress/tunnel-sync.sh apply
+        run: bash gateway/tunnel-sync.sh apply

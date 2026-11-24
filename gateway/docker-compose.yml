@@ -1,0 +1,49 @@
+# 統一入口與轉接：Cloudflare Tunnel → gateway-cloudflared → gateway-nginx → 依 Host 轉到各服務。
+#   路由（哪個 hostname 進 Tunnel、要不要驗 Access JWT）：cloudflare-tunnel.json，用 tunnel-sync.sh 套用
+#   轉到哪個服務、哪些路徑擋掉：nginx/conf.d/<name>.conf
+# Dokploy：Compose app，Compose Path ./gateway/docker-compose.yml，Environment 填 TUNNEL_TOKEN，不要加 Domain（不經 Dokploy 的 Traefik）。
+# 這個 compose 負責建立每個服務的 gw-<name> 網路，所以要比服務先部署；新增服務時先改這裡、部署，再部署服務。
+services:
+  gateway-cloudflared:
+    extends: {file: ../common/base.yml, service: hardened}
+    # 固定版本：上游改行為（例如 QUIC）會讓 tunnel 斷線；要升級時改這裡
+    image: cloudflare/cloudflared:2026.10.7
+    # QUIC 在家用網路上會定期斷線，改用 http2
+    command: tunnel --no-autoupdate --protocol http2 run
+    read_only: true
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?請設定 TUNNEL_TOKEN（Cloudflare Zero Trust 建立 Tunnel 時取得）}
+    # 只連得到 gateway-nginx，碰不到任何服務
+    networks: [edge]
+    depends_on:
+      gateway-nginx:
+        condition: service_healthy
+
+  gateway-nginx:
+    extends: {file: ../common/base.yml, service: hardened}
+    image: nginxinc/nginx-unprivileged:1.30.6-alpine
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    read_only: true
+    tmpfs: [/tmp]
+    # 8080 不 publish：只給 cloudflared。
+    # 8788 是 newsletter 的區網入口；只綁 IPv4：IPv6 經 docker-proxy 轉進來時來源會變成 bridge 閘道，繞過來源檢查
+    ports:
+      - "0.0.0.0:8788:8788"
+    # 每個服務一個網路：gateway 連得到全部，服務之間互相連不到（也就繞不過 gateway 的規則）
+    networks: [edge, gw-newsletter]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  # 子網固定在 172.31.0.0/16：nginx/conf.d/00-common.conf 的 geo $lan 靠這個排除容器來源，改了要一起改
+  edge:
+    ipam: {config: [{subnet: 172.31.0.0/24}]}
+  # 新增服務：複製一段，name 與 subnet 往下編號（172.31.2.0/24 …），並把網路加進 gateway-nginx.networks、
+  # 把 .1 閘道加進 00-common.conf 的 geo $lan
+  gw-newsletter:
+    name: gw-newsletter
+    ipam: {config: [{subnet: 172.31.1.0/24}]}

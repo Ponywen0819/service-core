@@ -1,0 +1,28 @@
+# GitHub Actions self-hosted runner 共用的部分。每個 repo 一個 runner 時，用 extends 引用，只寫不同的地方：
+#
+#   services:
+#     runner-newsletter:
+#       extends: {file: ../../common/github-runner.yml, service: github-runner}
+#       environment:
+#         REPO_URL: https://github.com/<owner>/<repo>
+#         ACCESS_TOKEN: ${ACCESS_TOKEN:?請設定 ACCESS_TOKEN}
+#         RUNNER_NAME_PREFIX: win-i5
+#         RUNNER_WORKDIR: /tmp/runner/runner-newsletter/work   # 每個 runner 一個，否則同時跑會互踩
+#
+# ⚠ 掛 docker.sock 等於給 workflow host 的 root：只給自己的私有 repo 用，公開 repo 的 fork PR 不能跑在這上面。
+services:
+  github-runner:
+    image: myoung34/github-runner:latest
+    restart: unless-stopped
+    environment:
+      RUNNER_SCOPE: repo
+      RANDOM_RUNNER_SUFFIX: "true"
+      LABELS: self-hosted,linux,x64,docker
+      EPHEMERAL: "true"            # 每個 job 跑完就重建，環境保持乾淨
+      DISABLE_AUTO_UPDATE: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # 讓 workflow 能執行 docker build/run
+      - /tmp/runner:/tmp/runner                      # host 和容器路徑要一致，docker 掛載 volume 才不會錯
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

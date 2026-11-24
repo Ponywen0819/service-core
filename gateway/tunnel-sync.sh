@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cloudflare Tunnel 路由的 GitOps：ingress/cloudflare-tunnel.json 是唯一來源，網頁上改的會在下次 apply 被蓋掉。
+# Cloudflare Tunnel 路由的 GitOps：gateway/cloudflare-tunnel.json 是唯一來源，網頁上改的會在下次 apply 被蓋掉。
 #   tunnel-sync.sh export   把線上設定匯出成 cloudflare-tunnel.json（第一次導入時跑一次）
 #   tunnel-sync.sh check    只驗檔案，不連網
 #   tunnel-sync.sh diff     與線上設定比對（不改任何東西）
@@ -38,7 +38,7 @@ cmd_export() {
 }
 
 cmd_check() {
-  [ -f "$FILE" ] || fail "$FILE 不存在：先用 'ingress/tunnel-sync.sh export' 匯出線上設定"
+  [ -f "$FILE" ] || fail "$FILE 不存在：先用 'gateway/tunnel-sync.sh export' 匯出線上設定"
   jq -e '.config.ingress | type == "array" and length > 0' "$FILE" >/dev/null \
     || fail "config.ingress 不能是空的"
   jq -e '.config.ingress[-1] | has("hostname") | not' "$FILE" >/dev/null \
