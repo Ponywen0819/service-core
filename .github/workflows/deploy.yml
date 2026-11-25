@@ -1,0 +1,79 @@
+name: deploy
+
+# 共用的推送式部署（reusable workflow）：ssh 到 host，由 authorized_keys 的 command= 執行專案的 deploy/deploy.sh <版本>。
+# 其他 repo 這樣呼叫（範本見 deploy/examples/）：
+#   jobs:
+#     deploy:
+#       uses: Ponywen0819/service-core/.github/workflows/deploy.yml@main
+#       with:
+#         tag: ${{ github.ref_name }}
+#         host: ${{ vars.DEPLOY_HOST }}
+#       secrets:
+#         ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}
+# 說明見 deploy/README.md。
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 要部署的版本（vX.Y.Z）
+        type: string
+        required: true
+      host:
+        description: ssh 目標，例如 root@192.168.1.125（runner 解析得到的位址；容器裡解析不到 .local）
+        type: string
+        required: true
+      runs-on:
+        description: runner 標籤（JSON 陣列）；要和 host 同一個網路
+        type: string
+        default: '["self-hosted", "linux", "x64"]'
+      environment:
+        description: GitHub environment 名稱（可在那裡加 Required reviewers，部署前人工核准）
+        type: string
+        default: production
+      timeout-minutes:
+        description: 含 deploy.sh 等待工作結束的時間（預設 30 分）、拉映像與等 healthy
+        type: number
+        default: 45
+    secrets:
+      ssh_key:
+        description: 部署專用私鑰（只給這個用途，host 端用 command= 限定）
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    environment: ${{ inputs.environment }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # 同一個 repo、同一個 environment 同時只部署一個版本，後到的排隊
+    concurrency:
+      group: deploy-${{ github.repository }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Deploy over ssh
+        env:
+          TAG: ${{ inputs.tag }}
+          HOST: ${{ inputs.host }}
+          SSH_KEY: ${{ secrets.ssh_key }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::版本號要是 vX.Y.Z：$TAG"; exit 1; }
+          if [ -z "$HOST" ] || [ -z "$SSH_KEY" ]; then
+            echo "::error::host 或 ssh_key 是空的：呼叫端要設定 vars.DEPLOY_HOST 與 secrets.DEPLOY_SSH_KEY（見 service-core deploy/README.md）"
+            exit 1
+          fi
+          # runner 映像不一定有 ssh client
+          if ! command -v ssh >/dev/null; then
+            sudo=$(command -v sudo || true)
+            $sudo apt-get update -qq && $sudo apt-get install -y -qq openssh-client >/dev/null
+          fi
+          dir=$(mktemp -d)
+          trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$dir/key"
+          chmod 600 "$dir/key"
+          # 不檢查 host key（重灌會變）：這把 key 被 command= 限定，公鑰認證也無法轉送，冒充的主機拿不到東西。
+          # 送出的「指令」只是版本號：host 端的 command= 固定執行 deploy.sh，版本號從 SSH_ORIGINAL_COMMAND 拿
+          ssh -i "$dir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 "$HOST" "$TAG"

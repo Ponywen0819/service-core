@@ -1,0 +1,24 @@
+# 範本：複製到專案 repo 的 .github/workflows/deploy.yml。
+# 重新部署或退版：Actions → deploy → Run workflow，填版本號（必須是已經建過映像的 tag）。
+# 注意：手動觸發的 workflow 要在 repo 的預設分支上才看得到。
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要部署的版本（vX.Y.Z）
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: Ponywen0819/service-core/.github/workflows/deploy.yml@main
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ vars.DEPLOY_HOST }}
+    secrets:
+      ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}

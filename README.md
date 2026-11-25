@@ -38,6 +38,7 @@
 | `services/_template/` | 新服務的起點（另有 `gateway/nginx/conf.d/_template.conf.example`） |
 | `services/pg/` | 正式區 Postgres（raspi，Quadlet 單元，不是 compose） |
 | `scripts/quadlet-install.sh` | 把服務資料夾的 Quadlet 單元裝到 raspi 的 `/etc/containers/systemd` |
+| `deploy/`、`.github/workflows/deploy.yml` | 別的 repo 的服務部署到 raspi 用：打 tag → CI ssh → host 上的 `deploy.sh`（推送式，host 不輪詢）。見 [deploy/README.md](deploy/README.md) |
 
 ## 命名規則
 
@@ -85,6 +86,7 @@
    ```
    用別名的話，對方 repo 的服務名稱（`web`）不用改。只有這個容器加入 `gw-*`，worker、DB 之類的不要。
 3. 部署順序：gateway 先（它建立 `gw-<name>`），服務後。
+4. 服務本身怎麼部署到 raspi（打 tag 自動部署）：見 [deploy/README.md](deploy/README.md)。
 
 ## 第一次設定
 
