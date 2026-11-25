@@ -153,8 +153,8 @@ gateway 在 podman 上的差異：
 
 - **DNS**：podman 沒有 Docker 的 `127.0.0.11`，DNS 是各網路閘道上的 aardvark-dns。`prepare.sh` 把 `01-resolver.conf` 換成 `resolver 172.31.0.1`
   （`gateway-edge` 的閘道）。aardvark 依查詢者所在的網路回答，所以從這裡也查得到 `gw-*` 上的容器（已在 raspi 上實測）。
-- **`nginx` 別名**：Cloudflare 上目前的 Tunnel 設定還是 newsletter-ops 的 `http://nginx:8080`，所以 `gateway-nginx` 在 `gateway-edge` 上帶了別名 `nginx`。
-  用 `tunnel-sync.sh apply` 套用 `cloudflare-tunnel.json`（`http://gateway-nginx:8080`）之後就可以拿掉。
+- **Access 與 AUD**：`*.ponygames.net` 的 Access app 也涵蓋 `newsletter.ponygames.net`。實際由哪個 app 發 JWT 看 Cloudflare 怎麼選，
+  所以 newsletter 那條規則同時接受兩個 AUD。之後專屬某個站台的 Access app，也要把萬用 app 的 AUD 一起列進它的 `audTag`。
 
 ## CI：pg-test 與 github-runner
 
@@ -169,4 +169,4 @@ gateway 在 podman 上的差異：
 - `extends: {file: ../../common/...}` 跨資料夾引用：Dokploy 部署 Git 來源時是 clone 整個 repo，應該可行，但文件沒明講。第一次部署看 Preview Compose／部署 log 確認。
 - Dokploy 每次部署會重新 clone，`./nginx/conf.d`、`./init` 這類 bind mount 指到新 clone 的檔案，改了要重新 Deploy 才生效。
 - `gw-*` 子網固定在 `172.31.0.0/16`：host 上若已有網路用了這段會建立失敗，換一段並同步改 `00-common.conf` 的 `geo $lan`（raspi 上沒衝突）。
-- raspi 上的 gateway 還沒重開機測試過；`cloudflare-tunnel.json` 還沒套用（需要 `CF_*` API 憑證，萬用規則的 AUD tag 也還是佔位符）。
+- raspi 上的 gateway 還沒重開機測試過。
