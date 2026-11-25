@@ -1,0 +1,5 @@
+# gateway-nginx ↔ car-record。名稱和子網要和 docker-compose.yml 的 gw-car-record 一致：服務端用 external 加入
+[Network]
+NetworkName=gw-car-record
+Subnet=172.31.2.0/24
+Gateway=172.31.2.1

@@ -31,7 +31,7 @@ services:
     ports:
       - "0.0.0.0:8788:8788"
     # 每個服務一個網路：gateway 連得到全部，服務之間互相連不到（也就繞不過 gateway 的規則）
-    networks: [edge, gw-newsletter]
+    networks: [edge, gw-newsletter, gw-car-record]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -47,3 +47,6 @@ networks:
   gw-newsletter:
     name: gw-newsletter
     ipam: {config: [{subnet: 172.31.1.0/24}]}
+  gw-car-record:
+    name: gw-car-record
+    ipam: {config: [{subnet: 172.31.2.0/24}]}
