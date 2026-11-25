@@ -7,9 +7,7 @@ After=network-online.target
 [Container]
 ContainerName=gateway-nginx
 Image=docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine
-# alias nginx：Cloudflare 上目前的 Tunnel 設定還是 newsletter-ops 時代的 http://nginx:8080。
-# 套用 gateway/cloudflare-tunnel.json（http://gateway-nginx:8080）之後就可以拿掉
-Network=gateway-edge.network:alias=nginx
+Network=gateway-edge.network
 # 新增服務：在這裡加一行 Network=gw-<name>.network，並在這個資料夾加對應的 .network
 Network=gw-newsletter.network
 # 只綁 IPv4（IPv6 進來的來源位址會被改寫，繞過 geo $lan）
