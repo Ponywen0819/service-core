@@ -1,0 +1,24 @@
+# Cloudflare Tunnel 的 connector。只在 gateway-edge 上：連得到 gateway-nginx，碰不到任何服務
+[Unit]
+Description=gateway cloudflared (Cloudflare Tunnel)
+Wants=network-online.target gateway-nginx.service
+After=network-online.target gateway-nginx.service
+
+[Container]
+ContainerName=gateway-cloudflared
+# 固定版本：上游改行為（例如 QUIC）會讓 tunnel 斷線；要升級時改這裡和 docker-compose.yml
+Image=docker.io/cloudflare/cloudflared:2026.10.7
+# QUIC 在家用網路上會定期斷線，改用 http2
+Exec=tunnel --no-autoupdate --protocol http2 run
+Secret=tunnel_token,type=env,target=TUNNEL_TOKEN
+Network=gateway-edge.network
+ReadOnly=true
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

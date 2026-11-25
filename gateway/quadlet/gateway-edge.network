@@ -1,0 +1,6 @@
+# cloudflared ↔ gateway-nginx 專用。子網和 docker-compose.yml 的 edge 一樣固定在 172.31.0.0/24：
+# nginx/conf.d/00-common.conf 的 geo $lan 靠它判斷來源；.1 也是 podman 的 DNS（aardvark-dns），見 prepare.sh 的 resolver
+[Network]
+NetworkName=gateway-edge
+Subnet=172.31.0.0/24
+Gateway=172.31.0.1
