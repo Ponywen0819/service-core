@@ -32,7 +32,8 @@
 | `common/postgres.yml` | 所有 Postgres 共用的部分（映像版本、時區、healthcheck） |
 | `common/github-runner.yml` | 所有 GitHub runner 共用的部分 |
 | `gateway/` | cloudflared + nginx、Tunnel 路由（`cloudflare-tunnel.json`）與同步腳本 |
-| `gateway/nginx/conf.d/` | `00-common.conf` 共用設定；每個站台一個 `<name>.conf` |
+| `gateway/nginx/conf.d/` | `00-common.conf` 共用設定、`01-resolver.conf`（Docker 的 DNS）；每個站台一個 `<name>.conf` |
+| `gateway/quadlet/` | raspi 上的 gateway（Quadlet 單元，和 `docker-compose.yml` 是同一套設定） |
 | `services/<name>/` | 一個服務一個資料夾，一個 Dokploy Compose app |
 | `services/_template/` | 新服務的起點（另有 `gateway/nginx/conf.d/_template.conf.example`） |
 | `services/pg/` | 正式區 Postgres（raspi，Quadlet 單元，不是 compose） |
@@ -51,6 +52,9 @@
 2. `gateway/docker-compose.yml`：
    - `networks:` 加一段 `gw-<name>`，`name: gw-<name>`、subnet 往下編號（`172.31.2.0/24` …）
    - 把 `gw-<name>` 加進 `gateway-nginx.networks`
+
+   raspi（`gateway/quadlet/`）也要同步：複製 `gw-newsletter.network` 成 `gw-<name>.network` 改名稱與子網，
+   `gateway-nginx.container` 加一行 `Network=gw-<name>.network`。
 3. `gateway/nginx/conf.d/00-common.conf` 的 `geo $lan` 加這個網路的閘道 `172.31.N.1 1;`。
 4. `cp gateway/nginx/conf.d/_template.conf.example gateway/nginx/conf.d/<name>.conf`，換掉 `CHANGEME`。
 5. 推上去。Dokploy：**先 Deploy gateway**（建立新網路、載入新站台），再新增 `<name>` 的 Compose app
@@ -127,9 +131,11 @@ newsletter-ops 那邊要改：
 # raspi 上，第一次
 git clone https://github.com/Ponywen0819/service-core /root/service-core
 printf '%s' '<密碼>' | podman secret create pg_pw -      # 機密只放 podman secret，不進 repo
+printf '%s' '<TUNNEL_TOKEN>' | podman secret create tunnel_token -
 
 # 安裝／更新（會先跑資料夾裡的 prepare.sh，再用 quadlet -dryrun 檢查語法，最後 daemon-reload 並重啟）
 cd /root/service-core && git pull && scripts/quadlet-install.sh services/pg
+cd /root/service-core && git pull && scripts/quadlet-install.sh gateway/quadlet   # 改了 nginx 站台設定也是跑這個
 systemctl status postgres.service
 
 # 移除單元（不刪 /srv 上的資料）
@@ -139,8 +145,16 @@ scripts/quadlet-install.sh --remove services/pg
 | 服務 | 單元 | 資料 | 備註 |
 |---|---|---|---|
 | `services/pg` | `postgres.container`、`pg.network`（`pg-net`） | `/srv/pg/data` | 5432 對 host 所有介面開放；初始化 SQL 在 `services/pg/init/`，`prepare.sh` 同步到 `/srv/pg/init` |
+| `gateway/quadlet` | `gateway-nginx.container`、`gateway-cloudflared.container`、`gateway-edge.network`、`gw-newsletter.network` | `/srv/gateway/nginx/conf.d`（從 repo 同步） | 8788 對 host 所有介面開放；secret `tunnel_token` |
 
 Quadlet 的服務名稱：`postgres.container` → `postgres.service`，`pg.network` → `pg-network.service`；log 用 `journalctl -u postgres.service`。
+
+gateway 在 podman 上的差異：
+
+- **DNS**：podman 沒有 Docker 的 `127.0.0.11`，DNS 是各網路閘道上的 aardvark-dns。`prepare.sh` 把 `01-resolver.conf` 換成 `resolver 172.31.0.1`
+  （`gateway-edge` 的閘道）。aardvark 依查詢者所在的網路回答，所以從這裡也查得到 `gw-*` 上的容器（已在 raspi 上實測）。
+- **`nginx` 別名**：Cloudflare 上目前的 Tunnel 設定還是 newsletter-ops 的 `http://nginx:8080`，所以 `gateway-nginx` 在 `gateway-edge` 上帶了別名 `nginx`。
+  用 `tunnel-sync.sh apply` 套用 `cloudflare-tunnel.json`（`http://gateway-nginx:8080`）之後就可以拿掉。
 
 ## CI：pg-test 與 github-runner
 
@@ -154,4 +168,5 @@ Quadlet 的服務名稱：`postgres.container` → `postgres.service`，`pg.netw
 
 - `extends: {file: ../../common/...}` 跨資料夾引用：Dokploy 部署 Git 來源時是 clone 整個 repo，應該可行，但文件沒明講。第一次部署看 Preview Compose／部署 log 確認。
 - Dokploy 每次部署會重新 clone，`./nginx/conf.d`、`./init` 這類 bind mount 指到新 clone 的檔案，改了要重新 Deploy 才生效。
-- `gw-*` 子網固定在 `172.31.0.0/16`：host 上若已有網路用了這段會建立失敗，換一段並同步改 `00-common.conf` 的 `geo $lan`。
+- `gw-*` 子網固定在 `172.31.0.0/16`：host 上若已有網路用了這段會建立失敗，換一段並同步改 `00-common.conf` 的 `geo $lan`（raspi 上沒衝突）。
+- raspi 上的 gateway 還沒重開機測試過；`cloudflare-tunnel.json` 還沒套用（需要 `CF_*` API 憑證，萬用規則的 AUD tag 也還是佔位符）。

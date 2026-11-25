@@ -96,6 +96,12 @@ cmd_apply() {
       echo "DNS created: $h -> $target"
     elif [ "$(jq -r '.content' <<<"$rec")" = "$target" ]; then
       echo "DNS ok: $h"
+    elif jq -e '.type == "CNAME" and (.content | endswith(".cfargotunnel.com"))' <<<"$rec" >/dev/null; then
+      # 指向別條（例如已刪除、重建前的）Tunnel：改指到這條。指向 Tunnel 以外的記錄不動
+      cf PATCH "/zones/$CF_ZONE_ID/dns_records/$(jq -r '.id' <<<"$rec")" \
+        --data "$(jq -nc --arg c "$target" '{content: $c, proxied: true}')" \
+        | jq -e '.success' >/dev/null || fail "更新 DNS $h 失敗"
+      echo "DNS moved: $h -> $target（原本 $(jq -r '.content' <<<"$rec")）"
     else
       fail "DNS $h 已存在但指向 $(jq -r '"\(.type) \(.content)"' <<<"$rec")，不是這個 Tunnel；請手動處理"
     fi

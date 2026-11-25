@@ -1,0 +1,5 @@
+# gateway-nginx ↔ newsletter-web。名稱和子網要和 docker-compose.yml 的 gw-newsletter 一致：服務端用 external 加入
+[Network]
+NetworkName=gw-newsletter
+Subnet=172.31.1.0/24
+Gateway=172.31.1.1

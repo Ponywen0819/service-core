@@ -1,0 +1,32 @@
+# gateway 的 nginx：8080 給 cloudflared（不 publish），8788 給區網。站台設定由 prepare.sh 從 gateway/nginx/conf.d 同步到 /srv/gateway
+[Unit]
+Description=gateway nginx (Host-based routing to services)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=gateway-nginx
+Image=docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine
+# alias nginx：Cloudflare 上目前的 Tunnel 設定還是 newsletter-ops 時代的 http://nginx:8080。
+# 套用 gateway/cloudflare-tunnel.json（http://gateway-nginx:8080）之後就可以拿掉
+Network=gateway-edge.network:alias=nginx
+# 新增服務：在這裡加一行 Network=gw-<name>.network，並在這個資料夾加對應的 .network
+Network=gw-newsletter.network
+# 只綁 IPv4（IPv6 進來的來源位址會被改寫，繞過 geo $lan）
+PublishPort=0.0.0.0:8788:8788
+Volume=/srv/gateway/nginx/conf.d:/etc/nginx/conf.d:ro
+ReadOnly=true
+Tmpfs=/tmp
+DropCapability=ALL
+NoNewPrivileges=true
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:8080/healthz
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

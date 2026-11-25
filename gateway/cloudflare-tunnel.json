@@ -19,7 +19,7 @@
           "access": {
             "required": true,
             "teamName": "ponygames",
-            "audTag": ["<*.ponygames.net 那個 Access Application 的 AUD tag>"]
+            "audTag": ["b58ac898c7d1dda528c191022b35aa519b3774edfe3ba7276e2bed8f557a2c11"]
           }
         }
       },
