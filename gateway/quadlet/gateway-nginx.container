@@ -10,6 +10,7 @@ Image=docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine
 Network=gateway-edge.network
 # 新增服務：在這裡加一行 Network=gw-<name>.network，並在這個資料夾加對應的 .network
 Network=gw-newsletter.network
+Network=gw-car-record.network
 # 只綁 IPv4（IPv6 進來的來源位址會被改寫，繞過 geo $lan）
 PublishPort=0.0.0.0:8788:8788
 Volume=/srv/gateway/nginx/conf.d:/etc/nginx/conf.d:ro

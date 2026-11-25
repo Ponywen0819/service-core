@@ -88,6 +88,15 @@
 3. 部署順序：gateway 先（它建立 `gw-<name>`），服務後。
 4. 服務本身怎麼部署到 raspi（打 tag 自動部署）：見 [deploy/README.md](deploy/README.md)。
 
+目前接上 gateway 的服務：
+
+| 網址 | repo | 網路（子網） | upstream（別名:port） | 站台 |
+|---|---|---|---|---|
+| `newsletter.ponygames.net`（區網另有 `:8788`） | newsletter-ops | `gw-newsletter`（`172.31.1.0/24`） | `newsletter-web:8787` | `newsletter.conf` |
+| `car-record.ponygames.net` | car-record | `gw-car-record`（`172.31.2.0/24`） | `car-record:8080` | `car-record.conf` |
+
+下一個服務用 `172.31.3.0/24`。
+
 ## 第一次設定
 
 1. **Cloudflare Access**：Zero Trust → Access → Applications → Self-hosted，domain 填 `*.ponygames.net`，政策只放行自己的 email。
@@ -147,7 +156,7 @@ scripts/quadlet-install.sh --remove services/pg
 | 服務 | 單元 | 資料 | 備註 |
 |---|---|---|---|
 | `services/pg` | `postgres.container`、`pg.network`（`pg-net`） | `/srv/pg/data` | 5432 對 host 所有介面開放；初始化 SQL 在 `services/pg/init/`，`prepare.sh` 同步到 `/srv/pg/init` |
-| `gateway/quadlet` | `gateway-nginx.container`、`gateway-cloudflared.container`、`gateway-edge.network`、`gw-newsletter.network` | `/srv/gateway/nginx/conf.d`（從 repo 同步） | 8788 對 host 所有介面開放；secret `tunnel_token` |
+| `gateway/quadlet` | `gateway-nginx.container`、`gateway-cloudflared.container`、`gateway-edge.network`、`gw-*.network`（每個服務一個） | `/srv/gateway/nginx/conf.d`（從 repo 同步） | 8788 對 host 所有介面開放；secret `tunnel_token` |
 
 Quadlet 的服務名稱：`postgres.container` → `postgres.service`，`pg.network` → `pg-network.service`；log 用 `journalctl -u postgres.service`。
 
