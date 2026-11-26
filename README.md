@@ -172,8 +172,11 @@ gateway 在 podman 上的差異：
 - 兩個都在 `dokploy-network`：runner 容器裡的步驟用 `pg-test:5432` 連；runner 用 docker.sock 開的兄弟容器不在這個網路，走 host 的 `5432`。
 - `pg-test` 的初始化 SQL 放 `services/pg-test/init/`（進 git）。原本的 `../files/init` 在這個 repo 結構下會解析到 `services/files/init`，所以改了。
 - runner 掛 docker.sock，等於 workflow 有 host 的 root。只給自己的私有 repo；公開 repo 的 fork PR 不能跑在上面。
-- 要給第二個 repo 開 runner：在 `services/github-runner/docker-compose.yml` 再加一個 `extends` 同一份 `common/github-runner.yml` 的服務，
-  `RUNNER_WORKDIR` 用不同路徑（同一個路徑同時跑兩個 job 會互踩）。
+- 要給第二個 repo 開 runner：在 `services/github-runner/docker-compose.yml` 再加一個 `extends` 同一份 `common/github-runner.yml` 的服務。
+- **不要設 `RUNNER_WORKDIR`**：runner 每個 job 開始會清空工作目錄的 `_actions`、`_temp`，共用同一個目錄的 runner 會刪掉對方正在用的 action
+  （例如 `Post Run actions/setup-python` 找不到 `action.yml`）。`common/github-runner.yml` 用 `RUNNER_WORKDIR_ROOT=/tmp/runner`，
+  工作目錄自動是 `/tmp/runner/<prefix>-<容器 hostname>`，每個容器（包含 scale 出來的副本）各一個。
+  容器重建後舊目錄不會自動刪，偶爾清一下 `/tmp/runner` 底下沒有對應容器的目錄（host 重開機也會清掉 `/tmp`）。
 
 ## 還沒驗證的地方
 
