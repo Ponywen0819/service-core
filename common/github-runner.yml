@@ -7,7 +7,12 @@
 #         REPO_URL: https://github.com/<owner>/<repo>
 #         ACCESS_TOKEN: ${ACCESS_TOKEN:?請設定 ACCESS_TOKEN}
 #         RUNNER_NAME_PREFIX: win-i5
-#         RUNNER_WORKDIR: /tmp/runner/runner-newsletter/work   # 每個 runner 一個，否則同時跑會互踩
+#
+# 工作目錄：不要設 RUNNER_WORKDIR。runner 每個 job 開始時會清空工作目錄的 _actions、_temp，
+# 兩個 runner（不同 repo，或同一個服務 scale 出來的副本）共用同一個目錄時，會刪掉對方正在用的 action。
+# 這裡改用映像內建的 RUNNER_WORKDIR_ROOT：工作目錄是 <RUNNER_WORKDIR_ROOT>/<runner 名稱>，
+# runner 名稱是 <RUNNER_NAME_PREFIX>-<容器 hostname>（RANDOM_RUNNER_SUFFIX=false），每個容器各一個，
+# EPHEMERAL 重啟時 hostname 不變，所以同一個容器一直用同一個目錄，不會越積越多（容器重建才會換新目錄）。
 #
 # ⚠ 掛 docker.sock 等於給 workflow host 的 root：只給自己的私有 repo 用，公開 repo 的 fork PR 不能跑在這上面。
 services:
@@ -16,7 +21,8 @@ services:
     restart: unless-stopped
     environment:
       RUNNER_SCOPE: repo
-      RANDOM_RUNNER_SUFFIX: "true"
+      RANDOM_RUNNER_SUFFIX: "false"         # 名稱用容器 hostname，工作目錄跟著它分開（見上面）
+      RUNNER_WORKDIR_ROOT: /tmp/runner
       LABELS: self-hosted,linux,x64,docker
       EPHEMERAL: "true"            # 每個 job 跑完就重建，環境保持乾淨
       DISABLE_AUTO_UPDATE: "true"
